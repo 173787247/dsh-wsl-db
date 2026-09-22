@@ -1,0 +1,11 @@
+- insert:
+    - id: dsh-wsl-db
+      name: dsh-wsl-db
+      config:
+        enabled: true
+        timeoutMs: 30000
+        connections: {}
+        allowAnyUrl: false
+        redisHosts:
+          - 127.0.0.1
+          - localhost
