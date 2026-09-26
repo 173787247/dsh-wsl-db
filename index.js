@@ -1,4 +1,4 @@
-import { dbStatus, psqlQuery, redisCmd } from "./lib/db.js";
+import { dbStatus, dbPing, psqlQuery, redisCmd } from "./lib/db.js";
 
 export const name = "dsh-wsl-db";
 export const inject = ["tools", "systemPrompt"];
@@ -52,7 +52,7 @@ export function apply(ctx, config = {}) {
     name: "db_status",
     description: "Whether psql / redis-cli are on PATH; list connection aliases (names only).",
     parameters: { type: "object", additionalProperties: false, properties: {} },
-    output: { schema: { type: "object", additionalProperties: true }, render: (_a, v) => [{ type: "text", text: JSON.stringify(v) }] },
+    output: { schema: { type: "object", additionalProperties: true }, render: (_a, v) => [{ type: "text", text: JSON.stringify(v, null, 2) }] },
     timeoutMs: 5_000,
     isConcurrencySafe: () => true,
     async execute() {
@@ -65,6 +65,47 @@ export function apply(ctx, config = {}) {
     },
     presentCall: () => ({ card: "generic", title: "db status" }),
     presentResult: (_a, r) => ({ card: "generic", title: "db status", content: r.content }),
+  });
+
+  ctx.tools.register({
+    name: "db_ping",
+    description: "Connectivity probe: postgres SELECT 1 (needs conn) and/or redis PING. target=auto|postgres|redis.",
+    parameters: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        target: { type: "string", description: "auto|postgres|redis" },
+        conn: { type: "string", description: "Alias or postgres URL for SELECT 1" },
+        host: { type: "string", description: "Redis host (must be in redisHosts)" },
+        port: { type: "number" },
+        db: { type: "number" },
+      },
+    },
+    output: {
+      schema: { type: "object", additionalProperties: true },
+      render: (_a, v) => [{ type: "text", text: JSON.stringify(v, null, 2) }],
+    },
+    timeoutMs: Math.min(timeoutMs, 15_000),
+    isConcurrencySafe: () => true,
+    async execute(args) {
+      try {
+        let conn;
+        if (args?.conn) conn = resolveConn(args.conn);
+        const host = args?.host ? guardRedisHost(args.host) : undefined;
+        return await dbPing({
+          target: args?.target || "auto",
+          conn,
+          host,
+          port: args?.port,
+          db: args?.db,
+          timeoutMs: Math.min(timeoutMs, 15_000),
+        });
+      } catch (e) {
+        return { ok: false, error: e instanceof Error ? e.message : String(e) };
+      }
+    },
+    presentCall: () => ({ card: "generic", title: "db ping" }),
+    presentResult: (_a, r) => ({ card: "generic", title: "db ping", content: r.content }),
   });
 
   ctx.tools.register({
